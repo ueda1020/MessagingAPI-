@@ -1,0 +1,65 @@
+name: UD System Login Check (LINE Alert)
+
+on:
+  schedule:
+    # UTCで23:00 = JST 08:00
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  login-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login and verify UD System
+        id: check
+        env:
+          BASE_URL: https://hu-udsystem.com/gateway/
+          LOGIN_URL: https://hu-udsystem.com/gateway/logon/
+          USERNAME: ${{ secrets.LOGIN_USERNAME }}
+          PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
+        run: |
+          # STEP1: CSRFトークン取得
+          echo "Fetching CSRF token from $BASE_URL"
+          CSRF=$(curl -s -c cookies.txt "$BASE_URL" | grep -oP '(?<=name="csrfmiddlewaretoken" value=").*?(?=")')
+          if [ -z "$CSRF" ]; then
+            echo "fail=true" >> "$GITHUB_OUTPUT"
+            echo "reason=CSRF token not found" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # STEP2: ログイン試行
+          echo "Logging in to UD System..."
+          RESPONSE=$(curl -s -L -b cookies.txt -c cookies.txt \
+            -d "csrfmiddlewaretoken=${CSRF}&user_id=${USERNAME}&pwd=${PASSWORD}" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -e "$BASE_URL" \
+            -X POST "$LOGIN_URL" \
+            -w "HTTPSTATUS:%{http_code}")
+
+          # HTTPコード抽出
+          HTTP_CODE=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+          BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
+
+          # 成功判定（タイトル検出）
+          if [ "$HTTP_CODE" = "200" ] && echo "$BODY" | grep -q "<title>UD Book Application Ver.1.0</title>"; then
+            echo "Login successful (HTTP 200, correct title)"
+            echo "fail=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Login failed (HTTP $HTTP_CODE)"
+            echo "fail=true" >> "$GITHUB_OUTPUT"
+            echo "reason=HTTP $HTTP_CODE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify LINE if failed
+        if: steps.check.outputs.fail == 'true'
+        env:
+          TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
+          TO: ${{ secrets.GROUP_ID }}
+          REASON: ${{ steps.check.outputs.reason }}
+        run: |
+          BODY=$(jq -n --arg to "$TO" --arg msg "UDシステムに接続できません（${REASON:-不明なエラー}）" \
+            '{to:$to, messages:[{type:"text", text:$msg}]}')
+          curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "$BODY"
