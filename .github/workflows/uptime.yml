@@ -1,17 +1,31 @@
-name: UD System Login Check (LINE Alert)
+name: UD System Login Check (with holiday skip)
 
 on:
   schedule:
-    # UTCで04:57 = JST 13:57
-    - cron: '0 9 * * *'
+    # UTC 22:50（日〜木）＝ JST 平日 07:50（翌日）
+    - cron: '30 22 * * 0-4'
   workflow_dispatch:
 
 jobs:
   login-check:
     runs-on: ubuntu-latest
-
     steps:
+      - name: Check Japanese holiday
+        id: holiday
+        run: |
+          TODAY=$(date -u '+%Y-%m-%d' -d '+9 hours')  # JSTの日付
+          echo "Today's date (JST): $TODAY"
+
+          HOLIDAY=$(curl -s https://holidays-jp.github.io/api/v1/date.json | jq -r --arg d "$TODAY" '."$d"')
+          if [ "$HOLIDAY" != "null" ]; then
+            echo "Today is a holiday in Japan: $HOLIDAY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Login and verify UD System
+        if: steps.holiday.outputs.skip == 'false'
         id: check
         env:
           BASE_URL: https://hu-udsystem.com/gateway/
@@ -20,9 +34,8 @@ jobs:
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
           echo "Fetching CSRF token..."
-          CSRF=$(curl -s -c cookies.txt "$BASE_URL" | grep -oP '(?<=name=\"csrfmiddlewaretoken\" value=\").*?(?=\")')
+          CSRF=$(curl -s -c cookies.txt "$BASE_URL" | grep -oP '(?<=name="csrfmiddlewaretoken" value=").*?(?=")')
           if [ -z "$CSRF" ]; then
-            echo "CSRF token not found"
             echo "fail=true" >> "$GITHUB_OUTPUT"
             echo "reason=CSRF token not found" >> "$GITHUB_OUTPUT"
             exit 0
@@ -40,7 +53,7 @@ jobs:
           BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
 
           if [ "$HTTP_CODE" = "200" ] && echo "$BODY" | grep -q "ビルダー"; then
-            echo "Login successful (keyword 'ビルダー' detected)"
+            echo "Login successful"
             echo "fail=false" >> "$GITHUB_OUTPUT"
           else
             echo "Login failed (HTTP $HTTP_CODE)"
