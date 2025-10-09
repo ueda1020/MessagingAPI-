@@ -3,7 +3,7 @@ name: UD System Login Check (LINE Alert)
 on:
   schedule:
     # UTCで04:57 = JST 13:57
-    - cron: '57 4 * * *'
+    - cron: '30 6 * * *'
   workflow_dispatch:
 
 jobs:
