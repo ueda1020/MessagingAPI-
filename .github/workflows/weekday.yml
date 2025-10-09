@@ -68,10 +68,12 @@ jobs:
           TO: ${{ secrets.GROUP_ID }}
           REASON: ${{ steps.check.outputs.reason }}
         run: |
-          BODY=$(jq -n --arg to "$TO" --arg msg "UDシステムに接続できません（${REASON:-不明なエラー}）" \
+          MSG="本日、出勤の皆様へ\n\nお世話になっております。\nエラーにより、ビルダーが開かなくなっております。\n復旧次第再度お知らせいたします。\nそれまでは、自宅待機でお願いいたします。"
+          BODY=$(jq -n --arg to "$TO" --arg msg "$MSG" \
             '{to:$to, messages:[{type:"text", text:$msg}]}')
 
           curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $TOKEN" \
             -d "$BODY"
+            
