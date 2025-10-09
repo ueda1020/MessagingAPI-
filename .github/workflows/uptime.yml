@@ -2,8 +2,8 @@ name: UD System Login Check (LINE Alert)
 
 on:
   schedule:
-    # UTCで23:00 = JST 08:00
-    - cron: '0 23 * * *'
+    # UTCで04:57 = JST 13:57
+    - cron: '57 4 * * *'
   workflow_dispatch:
 
 jobs:
@@ -20,8 +20,7 @@ jobs:
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
           echo "Fetching CSRF token..."
-          # Step1: CSRFトークンを取得
-          CSRF=$(curl -s -c cookies.txt "$BASE_URL" | grep -oP '(?<=name="csrfmiddlewaretoken" value=").*?(?=")')
+          CSRF=$(curl -s -c cookies.txt "$BASE_URL" | grep -oP '(?<=name=\"csrfmiddlewaretoken\" value=\").*?(?=\")')
           if [ -z "$CSRF" ]; then
             echo "CSRF token not found"
             echo "fail=true" >> "$GITHUB_OUTPUT"
@@ -30,7 +29,6 @@ jobs:
           fi
 
           echo "Attempting login..."
-          # Step2: ログイン試行
           RESPONSE=$(curl -s -b cookies.txt -c cookies.txt \
             -d "csrfmiddlewaretoken=${CSRF}&user_id=${USERNAME}&pwd=${PASSWORD}" \
             -H "Content-Type: application/x-www-form-urlencoded" \
@@ -38,11 +36,9 @@ jobs:
             -X POST "$LOGIN_URL" \
             -w "HTTPSTATUS:%{http_code}")
 
-          # Step3: HTTPコードと本文を抽出
           HTTP_CODE=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
 
-          # Step4: 成功判定（本文中に「ビルダー」が含まれているか）
           if [ "$HTTP_CODE" = "200" ] && echo "$BODY" | grep -q "ビルダー"; then
             echo "Login successful (keyword 'ビルダー' detected)"
             echo "fail=false" >> "$GITHUB_OUTPUT"
