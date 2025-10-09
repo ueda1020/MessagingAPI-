@@ -66,9 +66,8 @@ jobs:
         env:
           TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
           TO: ${{ secrets.GROUP_ID }}
-          REASON: ${{ steps.check.outputs.reason }}
         run: |
-          MSG="本日、出勤の皆様へ\n\nお世話になっております。\nエラーにより、ビルダーが開かなくなっております。\n復旧次第再度お知らせいたします。\nそれまでは、自宅待機でお願いいたします。"
+          MSG=$'本日、出勤の皆様へ\n\nお世話になっております。\nエラーにより、ビルダーが開かなくなっております。\n復旧次第再度お知らせいたします。\nそれまでは、自宅待機でお願いいたします。'
           BODY=$(jq -n --arg to "$TO" --arg msg "$MSG" \
             '{to:$to, messages:[{type:"text", text:$msg}]}')
 
@@ -76,4 +75,3 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $TOKEN" \
             -d "$BODY"
-            
