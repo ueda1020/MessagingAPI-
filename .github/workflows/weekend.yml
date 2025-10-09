@@ -1,0 +1,98 @@
+name: UD System Weekend & Holiday Check (07:30 JST)
+
+on:
+  schedule:
+    # 毎日 UTC 22:30 = JST 07:30
+    - cron: '30 22 * * *'
+  workflow_dispatch:
+
+jobs:
+  login-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide run (weekend or Japanese holiday)
+        id: decide
+        run: |
+          # JST の今日の日付と曜日を計算
+          TODAY_JST=$(date -u -d '+9 hours' '+%Y-%m-%d')
+          DOW_JST=$(date -u -d '+9 hours' '+%u')  # 1=Mon ... 7=Sun
+          echo "Today (JST): $TODAY_JST, DOW: $DOW_JST"
+
+          # 祝日判定（holidays-jp API）
+          HOLIDAY_NAME=$(curl -s https://holidays-jp.github.io/api/v1/date.json | jq -r --arg d "$TODAY_JST" '."$d"')
+          IS_HOLIDAY=false
+          if [ "$HOLIDAY_NAME" != "null" ]; then
+            IS_HOLIDAY=true
+          fi
+
+          # 土日判定（6=Sat, 7=Sun）
+          if [ "$DOW_JST" -eq 6 ] || [ "$DOW_JST" -eq 7 ]; then
+            IS_WEEKEND=true
+          else
+            IS_WEEKEND=false
+          fi
+
+          echo "is_weekend=$IS_WEEKEND" >> "$GITHUB_OUTPUT"
+          echo "is_holiday=$IS_HOLIDAY" >> "$GITHUB_OUTPUT"
+
+          # どちらでもなければスキップ
+          if [ "$IS_WEEKEND" = false ] && [ "$IS_HOLIDAY" = false ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Not weekend/holiday in JST. Skipping."
+            exit 0
+          fi
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "Weekend or holiday in JST. Proceed."
+
+      - name: Login and verify UD System
+        if: steps.decide.outputs.should_run == 'true'
+        id: check
+        env:
+          BASE_URL: https://hu-udsystem.com/gateway/
+          LOGIN_URL: https://hu-udsystem.com/gateway/logon/
+          USERNAME: ${{ secrets.LOGIN_USERNAME }}
+          PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
+        run: |
+          echo "Fetching CSRF token..."
+          CSRF=$(curl -s -c cookies.txt "$BASE_URL" | grep -oP '(?<=name="csrfmiddlewaretoken" value=").*?(?=")')
+          if [ -z "$CSRF" ]; then
+            echo "fail=true" >> "$GITHUB_OUTPUT"
+            echo "reason=CSRF token not found" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Attempting login..."
+          RESPONSE=$(curl -s -b cookies.txt -c cookies.txt \
+            -d "csrfmiddlewaretoken=${CSRF}&user_id=${USERNAME}&pwd=${PASSWORD}" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -e "$BASE_URL" \
+            -X POST "$LOGIN_URL" \
+            -w "HTTPSTATUS:%{http_code}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+          BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
+
+          # 成功判定：本文に「ビルダー」が含まれること
+          if [ "$HTTP_CODE" = "200" ] && echo "$BODY" | grep -q "ビルダー"; then
+            echo "Login successful"
+            echo "fail=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Login failed (HTTP $HTTP_CODE)"
+            echo "fail=true" >> "$GITHUB_OUTPUT"
+            echo "reason=HTTP $HTTP_CODE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify LINE if failed
+        if: steps.check.outputs.fail == 'true'
+        env:
+          TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
+          TO: ${{ secrets.GROUP_ID_WEEKEND }}
+        run: |
+          MSG=$'お世話になっております。\n現在、ビルダーが停止している状態です。\n対応可能な開発の方がいらっしゃいましたら、ご対応いただけますと助かります。'
+          BODY=$(jq -n --arg to "$TO" --arg msg "$MSG" \
+            '{to:$to, messages:[{type:"text", text:$msg}]}')
+
+          curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "$BODY"
