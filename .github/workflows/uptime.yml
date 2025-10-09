@@ -9,6 +9,7 @@ on:
 jobs:
   login-check:
     runs-on: ubuntu-latest
+
     steps:
       - name: Login and verify UD System
         id: check
@@ -18,31 +19,32 @@ jobs:
           USERNAME: ${{ secrets.LOGIN_USERNAME }}
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
-          # STEP1: CSRFトークン取得
-          echo "Fetching CSRF token from $BASE_URL"
+          echo "Fetching CSRF token..."
+          # Step1: CSRFトークンを取得
           CSRF=$(curl -s -c cookies.txt "$BASE_URL" | grep -oP '(?<=name="csrfmiddlewaretoken" value=").*?(?=")')
           if [ -z "$CSRF" ]; then
+            echo "CSRF token not found"
             echo "fail=true" >> "$GITHUB_OUTPUT"
             echo "reason=CSRF token not found" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # STEP2: ログイン試行
-          echo "Logging in to UD System..."
-          RESPONSE=$(curl -s -L -b cookies.txt -c cookies.txt \
+          echo "Attempting login..."
+          # Step2: ログイン試行
+          RESPONSE=$(curl -s -b cookies.txt -c cookies.txt \
             -d "csrfmiddlewaretoken=${CSRF}&user_id=${USERNAME}&pwd=${PASSWORD}" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -e "$BASE_URL" \
             -X POST "$LOGIN_URL" \
             -w "HTTPSTATUS:%{http_code}")
 
-          # HTTPコード抽出
+          # Step3: HTTPコードと本文を抽出
           HTTP_CODE=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
 
-          # 成功判定（タイトル検出）
-          if [ "$HTTP_CODE" = "200" ] && echo "$BODY" | grep -q "<title>UD Book Application Ver.1.0</title>"; then
-            echo "Login successful (HTTP 200, correct title)"
+          # Step4: 成功判定（本文中に「ビルダー」が含まれているか）
+          if [ "$HTTP_CODE" = "200" ] && echo "$BODY" | grep -q "ビルダー"; then
+            echo "Login successful (keyword 'ビルダー' detected)"
             echo "fail=false" >> "$GITHUB_OUTPUT"
           else
             echo "Login failed (HTTP $HTTP_CODE)"
@@ -59,6 +61,7 @@ jobs:
         run: |
           BODY=$(jq -n --arg to "$TO" --arg msg "UDシステムに接続できません（${REASON:-不明なエラー}）" \
             '{to:$to, messages:[{type:"text", text:$msg}]}')
+
           curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $TOKEN" \
