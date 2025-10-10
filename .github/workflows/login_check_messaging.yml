@@ -1,51 +1,76 @@
-name: UD System Weekend & Holiday Check (07:30 JST)
+name: UD System Login Check (Refactored)
 
 on:
   schedule:
-    # 毎日 UTC 22:30 = JST 07:30
-    - cron: '30 22 * * *'
+    # UTC 22:30 = JST 07:30 (毎日)
+    - cron: "30 22 * * *"
   workflow_dispatch:
 
 jobs:
   login-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Decide run (weekend or Japanese holiday)
-        id: decide
+      # JSTの日付と曜日を計算
+      - name: Get JST date and day of the week
+        id: get_date
         run: |
-          # JST の今日の日付と曜日を計算
           TODAY_JST=$(date -u -d '+9 hours' '+%Y-%m-%d')
           DOW_JST=$(date -u -d '+9 hours' '+%u')  # 1=Mon ... 7=Sun
           echo "Today (JST): $TODAY_JST, DOW: $DOW_JST"
+          echo "today_jst=$TODAY_JST" >> "$GITHUB_OUTPUT"
+          echo "dow_jst=$DOW_JST" >> "$GITHUB_OUTPUT"
 
-          # 祝日判定（holidays-jp API）
+      # 日本の祝日かどうかを判定
+      - name: Check if today is a Japanese holiday
+        id: check_holiday
+        run: |
+          TODAY_JST=${{ steps.get_date.outputs.today_jst }}
           HOLIDAY_NAME=$(curl -s https://holidays-jp.github.io/api/v1/date.json | jq -r --arg d "$TODAY_JST" '."$d"')
           IS_HOLIDAY=false
           if [ "$HOLIDAY_NAME" != "null" ]; then
             IS_HOLIDAY=true
           fi
-
-          # 土日判定（6=Sat, 7=Sun）
-          if [ "$DOW_JST" -eq 6 ] || [ "$DOW_JST" -eq 7 ]; then
-            IS_WEEKEND=true
-          else
-            IS_WEEKEND=false
-          fi
-
-          echo "is_weekend=$IS_WEEKEND" >> "$GITHUB_OUTPUT"
           echo "is_holiday=$IS_HOLIDAY" >> "$GITHUB_OUTPUT"
 
-          # どちらでもなければスキップ
-          if [ "$IS_WEEKEND" = false ] && [ "$IS_HOLIDAY" = false ]; then
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Not weekend/holiday in JST. Skipping."
-            exit 0
+      # 土日かどうかを判定
+      - name: Check if today is a weekend
+        id: check_weekend
+        run: |
+          DOW_JST=${{ steps.get_date.outputs.dow_jst }}
+          IS_WEEKEND=false
+          if [ "$DOW_JST" -eq 6 ] || [ "$DOW_JST" -eq 7 ]; then
+            IS_WEEKEND=true
           fi
-          echo "should_run=true" >> "$GITHUB_OUTPUT"
-          echo "Weekend or holiday in JST. Proceed."
+          echo "is_weekend=$IS_WEEKEND" >> "$GITHUB_OUTPUT"
 
+      # 平日かどうかを判定
+      - name: Determine if today is a weekday
+        id: determine_weekday
+        run: |
+          IS_HOLIDAY=${{ steps.check_holiday.outputs.is_holiday }}
+          IS_WEEKEND=${{ steps.check_weekend.outputs.is_weekend }}
+          IS_WEEKDAY=false
+          if [ "$IS_HOLIDAY" = false ] && [ "$IS_WEEKEND" = false ]; then
+            IS_WEEKDAY=true
+          fi
+          echo "is_weekday=$IS_WEEKDAY" >> "$GITHUB_OUTPUT"
+
+      # 通知先とメッセージを設定
+      - name: Set notification variables
+        id: set_notification
+        run: |
+          IS_WEEKDAY=${{ steps.determine_weekday.outputs.is_weekday }}
+          if [ "$IS_WEEKDAY" = true ]; then
+            echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
+            echo "message=$'本日、出勤の皆様へ\n\nお世話になっております。\nエラーにより、ビルダーが開かなくなっております。\n復旧次第再度お知らせいたします。\nそれまでは、自宅待機でお願いいたします。'" >> "$GITHUB_OUTPUT"
+          else
+            echo "group_id=${{ secrets.GROUP_ID_WEEKEND }}" >> "$GITHUB_OUTPUT"
+            echo "message=$'お世話になっております。\n現在、ビルダーが停止している状態です。\n対応可能な開発の方がいらっしゃいましたら、ご対応いただけますと助かります。'" >> "$GITHUB_OUTPUT"
+          fi
+
+      # システムのログインチェック
       - name: Login and verify UD System
-        if: steps.decide.outputs.should_run == 'true'
+        if: steps.determine_weekday.outputs.is_weekday == 'true' || steps.check_weekend.outputs.is_weekend == 'true'
         id: check
         env:
           BASE_URL: https://hu-udsystem.com/gateway/
@@ -72,7 +97,6 @@ jobs:
           HTTP_CODE=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
 
-          # 成功判定：本文に「ビルダー」が含まれること
           if [ "$HTTP_CODE" = "200" ] && echo "$BODY" | grep -q "ビルダー"; then
             echo "Login successful"
             echo "fail=false" >> "$GITHUB_OUTPUT"
@@ -82,13 +106,14 @@ jobs:
             echo "reason=HTTP $HTTP_CODE" >> "$GITHUB_OUTPUT"
           fi
 
+      # LINE通知
       - name: Notify LINE if failed
         if: steps.check.outputs.fail == 'true'
         env:
           TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
-          TO: ${{ secrets.GROUP_ID_WEEKEND }}
         run: |
-          MSG=$'お世話になっております。\n現在、ビルダーが停止している状態です。\n対応可能な開発の方がいらっしゃいましたら、ご対応いただけますと助かります。'
+          MSG=$(echo "${{ steps.set_notification.outputs.message }}")
+          TO=$(echo "${{ steps.set_notification.outputs.group_id }}")
           BODY=$(jq -n --arg to "$TO" --arg msg "$MSG" \
             '{to:$to, messages:[{type:"text", text:$msg}]}')
 
