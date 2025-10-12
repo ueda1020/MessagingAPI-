@@ -62,10 +62,25 @@ jobs:
           IS_WEEKDAY=${{ steps.determine_weekday.outputs.is_weekday }}
           if [ "$IS_WEEKDAY" = true ]; then
             echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
-            echo "message=$'本日、出勤の皆様へ\n\nお世話になっております。\nエラーにより、ビルダーが開かなくなっております。\n復旧次第再度お知らせいたします。\nそれまでは、自宅待機でお願いいたします。'" >> "$GITHUB_OUTPUT"
+            {
+              echo "message<<EOF"
+              echo "本日、出勤の皆様へ"
+              echo ""
+              echo "お世話になっております。"
+              echo "エラーにより、ビルダーが開かなくなっております。"
+              echo "復旧次第再度お知らせいたします。"
+              echo "それまでは、自宅待機でお願いいたします。"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
             echo "group_id=${{ secrets.GROUP_ID_WEEKEND }}" >> "$GITHUB_OUTPUT"
-            echo "message=$'お世話になっております。\n現在、ビルダーが停止している状態です。\n対応可能な開発の方がいらっしゃいましたら、ご対応いただけますと助かります。'" >> "$GITHUB_OUTPUT"
+            {
+              echo "message<<EOF"
+              echo "お世話になっております。"
+              echo "現在、ビルダーが停止している状態です。"
+              echo "対応可能な開発の方がいらっしゃいましたら、ご対応いただけますと助かります。"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       # システムのログインチェック
