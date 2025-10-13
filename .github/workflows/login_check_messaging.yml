@@ -1,4 +1,4 @@
-name: UD System Login Check (Refactored)
+name: UD System Login Check
 
 on:
   schedule:
@@ -62,10 +62,25 @@ jobs:
           IS_WEEKDAY=${{ steps.determine_weekday.outputs.is_weekday }}
           if [ "$IS_WEEKDAY" = true ]; then
             echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
-            echo "message=$'本日、出勤の皆様へ\n\nお世話になっております。\nエラーにより、ビルダーが開かなくなっております。\n復旧次第再度お知らせいたします。\nそれまでは、自宅待機でお願いいたします。'" >> "$GITHUB_OUTPUT"
+            {
+              echo "message<<EOF"
+              echo "本日、出勤の皆様へ"
+              echo ""
+              echo "お世話になっております。"
+              echo "エラーにより、ビルダーが開かなくなっております。"
+              echo "復旧次第再度お知らせいたします。"
+              echo "それまでは、自宅待機でお願いいたします。"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
             echo "group_id=${{ secrets.GROUP_ID_WEEKEND }}" >> "$GITHUB_OUTPUT"
-            echo "message=$'お世話になっております。\n現在、ビルダーが停止している状態です。\n対応可能な開発の方がいらっしゃいましたら、ご対応いただけますと助かります。'" >> "$GITHUB_OUTPUT"
+            {
+              echo "message<<EOF"
+              echo "お世話になっております。"
+              echo "現在、ビルダーが停止している状態です。"
+              echo "対応可能な開発の方がいらっしゃいましたら、ご対応いただけますと助かります。"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       # システムのログインチェック
@@ -117,6 +132,34 @@ jobs:
           BODY=$(jq -n --arg to "$TO" --arg msg "$MSG" \
             '{to:$to, messages:[{type:"text", text:$msg}]}')
 
+          curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "$BODY"
+
+      # 「MessagingAPIのテスト」のLINEグループに通知
+      - name: Notify LINE for test result
+        env:
+          TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
+        run: |
+          # JSTの現在時刻を取得
+          CURRENT_TIME_JST=$(date -u -d '+9 hours' '+%Y年 %m月%d日 (%H時%M分 GMT + 9)')
+          
+          # テスト結果に応じたメッセージを作成
+          if [ "${{ steps.check.outputs.fail }}" = "false" ]; then
+            MSG="【ログイン成功】\n${CURRENT_TIME_JST}\nシステムのログイン検証に成功しました"
+          else
+            MSG="【ログイン失敗】\n${CURRENT_TIME_JST}\nシステムのログイン検証に失敗しました"
+          fi
+
+          # 通知先グループID
+          TO=${{ secrets.GROUP_ID_TEST }}
+
+          # LINE通知のリクエストボディを作成
+          BODY=$(jq -n --arg to "$TO" --arg msg "$MSG" \
+            '{to:$to, messages:[{type:"text", text:$msg}]}')
+
+          # LINE通知を送信
           curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $TOKEN" \
