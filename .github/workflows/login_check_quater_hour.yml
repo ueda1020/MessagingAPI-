@@ -1,4 +1,4 @@
-name: UD System DailyLogin Check
+name: UD System QuarterHourLogin Check
 
 on:
   schedule:
