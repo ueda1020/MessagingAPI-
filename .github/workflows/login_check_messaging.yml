@@ -10,56 +10,26 @@ jobs:
   login-check:
     runs-on: ubuntu-latest
     steps:
+      # リポジトリのチェックアウト
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       # JSTの日付と曜日を計算
       - name: Get JST date and day of the week
         id: get_date
         run: |
-          TODAY_JST=$(date -u -d '+9 hours' '+%Y-%m-%d')
-          DOW_JST=$(date -u -d '+9 hours' '+%u')  # 1=Mon ... 7=Sun
-          echo "Today (JST): $TODAY_JST, DOW: $DOW_JST"
-          echo "today_jst=$TODAY_JST" >> "$GITHUB_OUTPUT"
-          echo "dow_jst=$DOW_JST" >> "$GITHUB_OUTPUT"
-
-      # 日本の祝日かどうかを判定
-      - name: Check if today is a Japanese holiday
-        id: check_holiday
-        run: |
-          TODAY_JST=${{ steps.get_date.outputs.today_jst }}
-          HOLIDAY_NAME=$(curl -s https://holidays-jp.github.io/api/v1/date.json | jq -r --arg d "$TODAY_JST" '."$d"')
-          IS_HOLIDAY=false
-          if [ "$HOLIDAY_NAME" != "null" ]; then
-            IS_HOLIDAY=true
-          fi
-          echo "is_holiday=$IS_HOLIDAY" >> "$GITHUB_OUTPUT"
-
-      # 土日かどうかを判定
-      - name: Check if today is a weekend
-        id: check_weekend
-        run: |
-          DOW_JST=${{ steps.get_date.outputs.dow_jst }}
-          IS_WEEKEND=false
-          if [ "$DOW_JST" -eq 6 ] || [ "$DOW_JST" -eq 7 ]; then
-            IS_WEEKEND=true
-          fi
-          echo "is_weekend=$IS_WEEKEND" >> "$GITHUB_OUTPUT"
-
-      # 平日かどうかを判定
-      - name: Determine if today is a weekday
-        id: determine_weekday
-        run: |
-          IS_HOLIDAY=${{ steps.check_holiday.outputs.is_holiday }}
-          IS_WEEKEND=${{ steps.check_weekend.outputs.is_weekend }}
-          IS_WEEKDAY=false
-          if [ "$IS_HOLIDAY" = false ] && [ "$IS_WEEKEND" = false ]; then
-            IS_WEEKDAY=true
-          fi
-          echo "is_weekday=$IS_WEEKDAY" >> "$GITHUB_OUTPUT"
+          bash scripts/date_check.sh
+          echo "today_jst=$today_jst" >> "$GITHUB_OUTPUT"
+          echo "dow_jst=$dow_jst" >> "$GITHUB_OUTPUT"
+          echo "is_holiday=$is_holiday" >> "$GITHUB_OUTPUT"
+          echo "is_weekend=$is_weekend" >> "$GITHUB_OUTPUT"
+          echo "is_weekday=$is_weekday" >> "$GITHUB_OUTPUT"
 
       # 通知先とメッセージを設定
       - name: Set notification variables
         id: set_notification
         run: |
-          IS_WEEKDAY=${{ steps.determine_weekday.outputs.is_weekday }}
+          IS_WEEKDAY=${{ steps.get_date.outputs.is_weekday }}
           if [ "$IS_WEEKDAY" = true ]; then
             echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
             {
@@ -83,59 +53,25 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
-      # システムのログインチェック
-      - name: Login and verify UD System
-        if: steps.determine_weekday.outputs.is_weekday == 'true' || steps.check_weekend.outputs.is_weekend == 'true'
-        id: check
+      # ページのアクセスとログインチェック
+      - name: Check page accessibility and login
+        id: page_access_check
         env:
-          BASE_URL: https://hu-udsystem.com/gateway/
-          LOGIN_URL: https://hu-udsystem.com/gateway/logon/
           USERNAME: ${{ secrets.LOGIN_USERNAME }}
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
-          echo "Fetching CSRF token..."
-          CSRF=$(curl -s -c cookies.txt "$BASE_URL" | grep -oP '(?<=name="csrfmiddlewaretoken" value=").*?(?=")')
-          if [ -z "$CSRF" ]; then
-            echo "fail=true" >> "$GITHUB_OUTPUT"
-            echo "reason=CSRF token not found" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "Attempting login..."
-          RESPONSE=$(curl -s -b cookies.txt -c cookies.txt \
-            -d "csrfmiddlewaretoken=${CSRF}&user_id=${USERNAME}&pwd=${PASSWORD}" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -e "$BASE_URL" \
-            -X POST "$LOGIN_URL" \
-            -w "HTTPSTATUS:%{http_code}")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-          BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
-
-          if [ "$HTTP_CODE" = "200" ] && echo "$BODY" | grep -q "ビルダー"; then
-            echo "Login successful"
-            echo "fail=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Login failed (HTTP $HTTP_CODE)"
-            echo "fail=true" >> "$GITHUB_OUTPUT"
-            echo "reason=HTTP $HTTP_CODE" >> "$GITHUB_OUTPUT"
-          fi
+          bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
+          echo "page_accessible=$PAGE_ACCESSIBLE" >> "$GITHUB_OUTPUT"
 
       # LINE通知
       - name: Notify LINE if failed
-        if: steps.check.outputs.fail == 'true'
+        if: ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'false'
         env:
           TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
         run: |
           MSG=$(echo "${{ steps.set_notification.outputs.message }}")
           TO=$(echo "${{ steps.set_notification.outputs.group_id }}")
-          BODY=$(jq -n --arg to "$TO" --arg msg "$MSG" \
-            '{to:$to, messages:[{type:"text", text:$msg}]}')
-
-          curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d "$BODY"
+          bash scripts/line_notify.sh "$TOKEN" "$TO" "$MSG"
 
       # 「MessagingAPIのテスト」のLINEグループに通知
       - name: Notify LINE for test result
@@ -146,7 +82,7 @@ jobs:
           CURRENT_TIME_JST=$(date -u -d '+9 hours' '+%Y年 %m月%d日 (%H時%M分 GMT + 9)')
           
           # テスト結果に応じたメッセージを作成
-          if [ "${{ steps.check.outputs.fail }}" = "false" ]; then
+          if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'true'; then
             MSG="【ログイン成功】\n${CURRENT_TIME_JST}\nシステムのログイン検証に成功しました"
           else
             MSG="【ログイン失敗】\n${CURRENT_TIME_JST}\nシステムのログイン検証に失敗しました"
@@ -155,12 +91,5 @@ jobs:
           # 通知先グループID
           TO=${{ secrets.GROUP_ID_TEST }}
 
-          # LINE通知のリクエストボディを作成
-          BODY=$(jq -n --arg to "$TO" --arg msg "$MSG" \
-            '{to:$to, messages:[{type:"text", text:$msg}]}')
-
-          # LINE通知を送信
-          curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d "$BODY"
+          # LINE通知スクリプトを呼び出し
+          bash scripts/line_notify.sh "$TOKEN" "$TO" "$MSG"
