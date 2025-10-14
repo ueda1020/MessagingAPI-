@@ -11,7 +11,7 @@ PAGE_ACCESSIBLE=false
 # Check page accessibility
 echo "Checking access to $URL ..."
 if curl --silent --head --fail "$URL" > /dev/null; then
-  echo "ページにアクセス可能です"
+  echo "Page is Accessible"
 
   # Attempt login if page is accessible
   echo "Attempting login..."
@@ -37,7 +37,8 @@ if curl --silent --head --fail "$URL" > /dev/null; then
     echo "CSRF token not found"
   fi
 else
-  echo "アクセス不可能です"
+  echo "Page is not accessible"
 fi
 
-echo "Page Accessible: $PAGE_ACCESSIBLE"
+# GitHub Actionsの$GITHUB_OUTPUTに書き込む
+echo "page_accessible=$PAGE_ACCESSIBLE" >> "$GITHUB_OUTPUT"

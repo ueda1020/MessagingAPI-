@@ -23,9 +23,9 @@ if [ "$IS_HOLIDAY" = false ] && [ "$IS_WEEKEND" = false ]; then
   IS_WEEKDAY=true
 fi
 
-# 結果を出力
-echo "today_jst=$TODAY_JST"
-echo "dow_jst=$DOW_JST"
-echo "is_holiday=$IS_HOLIDAY"
-echo "is_weekend=$IS_WEEKEND"
-echo "is_weekday=$IS_WEEKDAY"
+# GitHub Actionsの$GITHUB_OUTPUTに書き込む
+echo "today_jst=$TODAY_JST" >> "$GITHUB_OUTPUT"
+echo "dow_jst=$DOW_JST" >> "$GITHUB_OUTPUT"
+echo "is_holiday=$IS_HOLIDAY" >> "$GITHUB_OUTPUT"
+echo "is_weekend=$IS_WEEKEND" >> "$GITHUB_OUTPUT"
+echo "is_weekday=$IS_WEEKDAY" >> "$GITHUB_OUTPUT"

@@ -16,3 +16,5 @@ curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "$BODY"
+
+echo "Notification sent."

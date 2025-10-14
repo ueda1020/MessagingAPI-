@@ -10,27 +10,21 @@ jobs:
   login-check:
     runs-on: ubuntu-latest
     steps:
-      # リポジトリのチェックアウト
-      - name: Checkout repository
+      - name: リポジトリのチェックアウト
         uses: actions/checkout@v4
 
-      # JSTの日付と曜日を計算
-      - name: Get JST date and day of the week
+      - name: JSTの日付と曜日を計算
         id: get_date
         run: |
           bash scripts/date_check.sh
-          echo "today_jst=$today_jst" >> "$GITHUB_OUTPUT"
-          echo "dow_jst=$dow_jst" >> "$GITHUB_OUTPUT"
-          echo "is_holiday=$is_holiday" >> "$GITHUB_OUTPUT"
-          echo "is_weekend=$is_weekend" >> "$GITHUB_OUTPUT"
-          echo "is_weekday=$is_weekday" >> "$GITHUB_OUTPUT"
 
-      # 通知先とメッセージを設定
-      - name: Set notification variables
+      # 事務・制作連絡用通知先とメッセージを設定
+      # 平日は「うじラボ勤務」土日祝日は「開発コミュ」
+      - name: 事務・制作への通知先とメッセージを設定
         id: set_notification
         run: |
           IS_WEEKDAY=${{ steps.get_date.outputs.is_weekday }}
-          if [ "$IS_WEEKDAY" = true ]; then
+          if [ "$IS_WEEKDAY" == true ]; then
             echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
             {
               echo "message<<EOF"
@@ -53,18 +47,16 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
-      # ページのアクセスとログインチェック
-      - name: Check page accessibility and login
+      - name: ページのアクセスとログインチェック
         id: page_access_check
         env:
           USERNAME: ${{ secrets.LOGIN_USERNAME }}
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
           bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
-          echo "page_accessible=$PAGE_ACCESSIBLE" >> "$GITHUB_OUTPUT"
 
-      # LINE通知
-      - name: Notify LINE if failed
+      # 事務と制作にLINE通知
+      - name: 事務・制作へのLINE通知
         if: ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'false'
         env:
           TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
@@ -74,7 +66,7 @@ jobs:
           bash scripts/line_notify.sh "$TOKEN" "$TO" "$MSG"
 
       # 「MessagingAPIのテスト」のLINEグループに通知
-      - name: Notify LINE for test result
+      - name: 「MessagingAPIのテスト」のLINEグループに通知
         env:
           TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
         run: |
@@ -83,9 +75,9 @@ jobs:
           
           # テスト結果に応じたメッセージを作成
           if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'true'; then
-            MSG="【ログイン成功】\n${CURRENT_TIME_JST}\nシステムのログイン検証に成功しました"
+            MSG='【ログイン成功】\n${CURRENT_TIME_JST}\nシステムのログイン検証に成功しました'
           else
-            MSG="【ログイン失敗】\n${CURRENT_TIME_JST}\nシステムのログイン検証に失敗しました"
+            MSG='【ログイン失敗】\n${CURRENT_TIME_JST}\nシステムのログイン検証に失敗しました'
           fi
 
           # 通知先グループID
