@@ -75,9 +75,9 @@ jobs:
           
           # テスト結果に応じたメッセージを作成
           if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'true'; then
-            MSG='【ログイン成功】\n${CURRENT_TIME_JST}\nシステムのログイン検証に成功しました'
+            MSG=$'【ログイン成功】\n${CURRENT_TIME_JST}\nシステムのログイン検証に成功しました'
           else
-            MSG='【ログイン失敗】\n${CURRENT_TIME_JST}\nシステムのログイン検証に失敗しました'
+            MSG=$'【ログイン失敗】\n${CURRENT_TIME_JST}\nシステムのログイン検証に失敗しました'
           fi
 
           # 通知先グループID
