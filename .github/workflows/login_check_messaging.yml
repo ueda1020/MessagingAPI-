@@ -20,15 +20,6 @@ jobs:
         run: |
           bash scripts/date_check.sh
 
-      # get_dateのoutputを出力してみる
-      - name: Output get_date outputs
-        run: |
-          echo "Today (JST): ${{ steps.get_date.outputs.today_jst }}"
-          echo "Day of the week (JST): ${{ steps.get_date.outputs.dow_jst }}"
-          echo "Is holiday: ${{ steps.get_date.outputs.is_holiday }}"
-          echo "Is weekend: ${{ steps.get_date.outputs.is_weekend }}"
-          echo "Is weekday: ${{ steps.get_date.outputs.is_weekday }}"
-
       # 通知先とメッセージを設定
       - name: Set notification variables
         id: set_notification
@@ -65,6 +56,11 @@ jobs:
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
           bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
+
+      # page_access_checkのoutputを出力してみる
+      - name: Output page_access_check outputs
+        run: |
+          echo "Page Accessible: ${{ steps.page_access_check.outputs.page_accessible }}"
 
       # LINE通知
       - name: Notify LINE if failed
