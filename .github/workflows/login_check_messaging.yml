@@ -57,11 +57,6 @@ jobs:
         run: |
           bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
 
-      # page_access_checkのoutputを出力してみる
-      - name: Output page_access_check outputs
-        run: |
-          echo "Page Accessible: ${{ steps.page_access_check.outputs.page_accessible }}"
-
       # LINE通知
       - name: Notify LINE if failed
         if: ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'false'
