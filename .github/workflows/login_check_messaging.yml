@@ -25,12 +25,21 @@ jobs:
           echo "is_weekend=$is_weekend" >> "$GITHUB_OUTPUT"
           echo "is_weekday=$is_weekday" >> "$GITHUB_OUTPUT"
 
+      # get_dateのoutputを出力してみる
+      - name: Output get_date outputs
+        run: |
+          echo "Today (JST): ${{ steps.get_date.outputs.today_jst }}"
+          echo "Day of the week (JST): ${{ steps.get_date.outputs.dow_jst }}"
+          echo "Is holiday: ${{ steps.get_date.outputs.is_holiday }}"
+          echo "Is weekend: ${{ steps.get_date.outputs.is_weekend }}"
+          echo "Is weekday: ${{ steps.get_date.outputs.is_weekday }}"
+
       # 通知先とメッセージを設定
       - name: Set notification variables
         id: set_notification
         run: |
           IS_WEEKDAY=${{ steps.get_date.outputs.is_weekday }}
-          if [ "$IS_WEEKDAY" = true ]; then
+          if [ "$IS_WEEKDAY" == true ]; then
             echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
             {
               echo "message<<EOF"
@@ -83,9 +92,9 @@ jobs:
           
           # テスト結果に応じたメッセージを作成
           if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'true'; then
-            MSG="【ログイン成功】\n${CURRENT_TIME_JST}\nシステムのログイン検証に成功しました"
+            MSG='【ログイン成功】\n${CURRENT_TIME_JST}\nシステムのログイン検証に成功しました'
           else
-            MSG="【ログイン失敗】\n${CURRENT_TIME_JST}\nシステムのログイン検証に失敗しました"
+            MSG='【ログイン失敗】\n${CURRENT_TIME_JST}\nシステムのログイン検証に失敗しました'
           fi
 
           # 通知先グループID
