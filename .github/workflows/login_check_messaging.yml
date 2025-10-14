@@ -10,18 +10,17 @@ jobs:
   login-check:
     runs-on: ubuntu-latest
     steps:
-      # リポジトリのチェックアウト
-      - name: Checkout repository
+      - name: リポジトリのチェックアウト
         uses: actions/checkout@v4
 
-      # JSTの日付と曜日を計算
-      - name: Get JST date and day of the week
+      - name: JSTの日付と曜日を計算
         id: get_date
         run: |
           bash scripts/date_check.sh
 
-      # 通知先とメッセージを設定
-      - name: Set notification variables
+      # 事務・制作連絡用通知先とメッセージを設定
+      # 平日は「うじラボ勤務」土日祝日は「開発コミュ」
+      - name: 事務・制作への通知先とメッセージを設定
         id: set_notification
         run: |
           IS_WEEKDAY=${{ steps.get_date.outputs.is_weekday }}
@@ -48,8 +47,7 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
-      # ページのアクセスとログインチェック
-      - name: Check page accessibility and login
+      - name: ページのアクセスとログインチェック
         id: page_access_check
         env:
           USERNAME: ${{ secrets.LOGIN_USERNAME }}
@@ -57,8 +55,8 @@ jobs:
         run: |
           bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
 
-      # LINE通知
-      - name: Notify LINE if failed
+      # 事務と制作にLINE通知
+      - name: 事務・制作へのLINE通知
         if: ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'false'
         env:
           TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
@@ -68,7 +66,7 @@ jobs:
           bash scripts/line_notify.sh "$TOKEN" "$TO" "$MSG"
 
       # 「MessagingAPIのテスト」のLINEグループに通知
-      - name: Notify LINE for test result
+      - name: 「MessagingAPIのテスト」のLINEグループに通知
         env:
           TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
         run: |
