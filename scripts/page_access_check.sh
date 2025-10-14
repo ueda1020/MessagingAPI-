@@ -40,4 +40,5 @@ else
   echo "アクセス不可能です"
 fi
 
-echo "Page Accessible: $PAGE_ACCESSIBLE"
+# GitHub Actionsの$GITHUB_OUTPUTに書き込む
+echo "page_accessible=$PAGE_ACCESSIBLE" >> "$GITHUB_OUTPUT"

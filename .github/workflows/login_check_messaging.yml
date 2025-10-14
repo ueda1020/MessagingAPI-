@@ -19,11 +19,6 @@ jobs:
         id: get_date
         run: |
           bash scripts/date_check.sh
-          echo "today_jst=$today_jst" >> "$GITHUB_OUTPUT"
-          echo "dow_jst=$dow_jst" >> "$GITHUB_OUTPUT"
-          echo "is_holiday=$is_holiday" >> "$GITHUB_OUTPUT"
-          echo "is_weekend=$is_weekend" >> "$GITHUB_OUTPUT"
-          echo "is_weekday=$is_weekday" >> "$GITHUB_OUTPUT"
 
       # get_dateのoutputを出力してみる
       - name: Output get_date outputs
@@ -70,7 +65,6 @@ jobs:
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
           bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
-          echo "page_accessible=$PAGE_ACCESSIBLE" >> "$GITHUB_OUTPUT"
 
       # LINE通知
       - name: Notify LINE if failed
