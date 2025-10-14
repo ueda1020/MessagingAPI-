@@ -1,9 +1,9 @@
-name: UD System Login Check
+name: UD System DailyLogin Check
 
 on:
   schedule:
-    # UTC 22:30 = JST 07:30 (毎日)
-    - cron: "30 22 * * *"
+    # UTC 21:30 = JST 06:30 (毎日)
+    - cron: "30 21 * * *"
   workflow_dispatch:
 
 jobs:
@@ -75,9 +75,9 @@ jobs:
           
           # テスト結果に応じたメッセージを作成
           if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'true'; then
-            MSG="【ログイン検証成功】 $CURRENT_TIME_JST"
+            MSG="【定時ログイン検証成功 (6:30)】 $CURRENT_TIME_JST"
           else
-            MSG="【ログイン検証失敗】 $CURRENT_TIME_JST"
+            MSG="【定時ログイン検証失敗 (6:30)】 $CURRENT_TIME_JST"
           fi
 
           # 通知先グループID

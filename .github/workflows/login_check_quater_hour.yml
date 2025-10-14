@@ -1,0 +1,43 @@
+name: UD System DailyLogin Check
+
+on:
+  schedule:
+    # 毎日15分間隔で実行
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  login-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: ページのアクセスとログインチェック
+        id: page_access_check
+        env:
+          USERNAME: ${{ secrets.LOGIN_USERNAME }}
+          PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
+        run: |
+          bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
+
+      # 「MessagingAPIのテスト」のLINEグループに通知
+      - name: 「MessagingAPIのテスト」のLINEグループに通知
+        env:
+          TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
+        run: |
+          # JSTの現在時刻を取得
+          CURRENT_TIME_JST=$(date -u -d '+9 hours' '+%Y年 %m月%d日 (%H時%M分 GMT + 9)')
+          
+          # テスト結果に応じたメッセージを作成
+          if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'true'; then
+            MSG="【定期ログイン検証成功 (15分間隔)】 $CURRENT_TIME_JST"
+          else
+            MSG="【定期ログイン検証失敗 (15分間隔)】 $CURRENT_TIME_JST"
+          fi
+
+          # 通知先グループID
+          TO=${{ secrets.GROUP_ID_TEST }}
+
+          # LINE通知スクリプトを呼び出し
+          bash scripts/line_notify.sh "$TOKEN" "$TO" "$MSG"
