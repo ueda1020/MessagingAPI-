@@ -27,8 +27,8 @@ echo "Response Body: $RESPONSE_BODY"
 
 # Check if the HTTP status is not 200
 if [ "$HTTP_STATUS" -ne 200 ]; then
-  echo "Error: LINE notification failed with status $HTTP_STATUS"
-  exit 1
+  echo "Warning: LINE notification failed with status $HTTP_STATUS"
+  echo "Continuing with the next steps..."
+else
+  echo "Notification sent successfully."
 fi
-
-echo "Notification sent successfully."
