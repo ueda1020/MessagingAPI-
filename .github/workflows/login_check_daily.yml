@@ -74,10 +74,10 @@ jobs:
           CURRENT_TIME_JST=$(date -u -d '+9 hours' '+%Y年 %m月%d日 (%H時%M分 GMT + 9)')
           
           # テスト結果に応じたメッセージを作成
-          if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'true'; then
-            MSG="【定時ログイン検証成功 (6:30)】 $CURRENT_TIME_JST"
+          if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'false'; then
+            MSG="【失敗: 定時ログイン検証 (6:30)】 $CURRENT_TIME_JST"
           else
-            MSG="【定時ログイン検証失敗 (6:30)】 $CURRENT_TIME_JST"
+            MSG="【成功: 定時ログイン検証 (6:30)】 $CURRENT_TIME_JST"
           fi
 
           # 通知先グループID
