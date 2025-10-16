@@ -1,0 +1,74 @@
+name: UD System DailyLogin Check (Sample)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  login-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: JSTの日付と曜日を計算
+        id: get_date
+        run: |
+          bash scripts/date_check.sh
+
+      # 事務・制作連絡用通知先とメッセージを設定
+      # 平日は「うじラボ勤務」土日祝日は「開発コミュ」
+      - name: 事務・制作への通知先とメッセージを設定
+        id: set_notification
+        run: |
+          IS_WEEKDAY=${{ steps.get_date.outputs.is_weekday }}
+          if [ "$IS_WEEKDAY" == true ]; then
+            echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
+            {
+              echo "message<<EOF"
+              echo "本日、出勤の皆様へ"
+              echo ""
+              echo "お世話になっております。"
+              echo "エラーにより、ビルダーが開かなくなっております。"
+              echo "復旧次第再度お知らせいたします。"
+              echo "それまでは、自宅待機でお願いいたします。"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "group_id=${{ secrets.GROUP_ID_WEEKEND }}" >> "$GITHUB_OUTPUT"
+            {
+              echo "message<<EOF"
+              echo "お世話になっております。"
+              echo "現在、ビルダーが停止している状態です。"
+              echo "対応可能な開発の方がいらっしゃいましたら、ご対応いただけますと助かります。"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: ページのアクセスとログインチェック
+        id: page_access_check
+        env:
+          USERNAME: ${{ secrets.LOGIN_USERNAME }}
+          PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
+        run: |
+          bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
+
+      # 「MessagingAPIのテスト」のLINEグループに通知
+      - name: 「MessagingAPIのテスト」のLINEグループに通知
+        env:
+          TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
+        run: |
+          # JSTの現在時刻を取得
+          CURRENT_TIME_JST=$(date -u -d '+9 hours' '+%Y年 %m月%d日 (%H時%M分 GMT + 9)')
+          
+          # テスト結果に応じたメッセージを作成
+          if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'false'; then
+            MSG="【失敗: 定時ログイン検証 (6:30)】 $CURRENT_TIME_JST"
+          else
+            MSG="【成功: 定時ログイン検証 (6:30)】 $CURRENT_TIME_JST"
+          fi
+
+          # 通知先グループID
+          TO=${{ secrets.GROUP_ID_TEST }}
+
+          # LINE通知スクリプトを呼び出し
+          bash scripts/line_notify.sh "$TOKEN" "$TO" "$MSG"
