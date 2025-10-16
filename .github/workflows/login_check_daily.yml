@@ -28,6 +28,7 @@ jobs:
             echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
             {
               echo "message<<EOF"
+              echo "---これは動作確認用のテストメッセージです---"
               echo "本日、出勤の皆様へ"
               echo ""
               echo "お世話になっております。"
@@ -54,10 +55,12 @@ jobs:
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
           bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
+        outputs:
+          page_accessible: ${{ steps.page_access_check.outputs.page_accessible }}
 
       # 事務と制作にLINE通知
       - name: 事務・制作へのLINE通知
-        if: ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'false'
+        if: ${{ steps.page_access_check.outputs.page_accessible == 'false' }}
         env:
           TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
         run: |
@@ -74,7 +77,7 @@ jobs:
           CURRENT_TIME_JST=$(date -u -d '+9 hours' '+%Y年 %m月%d日 (%H時%M分 GMT + 9)')
           
           # テスト結果に応じたメッセージを作成
-          if ${{ steps.page_access_check.outputs.page_accessible || 'false' }} == 'false'; then
+          if [ "${{ steps.page_access_check.outputs.page_accessible }}" = "false" ]; then
             MSG="【失敗: 定時ログイン検証 (6:30)】 $CURRENT_TIME_JST"
           else
             MSG="【成功: 定時ログイン検証 (6:30)】 $CURRENT_TIME_JST"
