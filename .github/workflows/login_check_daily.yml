@@ -9,6 +9,8 @@ on:
 jobs:
   login-check:
     runs-on: ubuntu-latest
+    outputs:
+      page_accessible: ${{ steps.page_access_check.outputs.page_accessible }}
     steps:
       - name: リポジトリのチェックアウト
         uses: actions/checkout@v4
@@ -55,8 +57,6 @@ jobs:
           PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
           bash scripts/page_access_check.sh "$USERNAME" "$PASSWORD"
-        outputs:
-          page_accessible: ${{ steps.page_access_check.outputs.page_accessible }}
 
       # 事務と制作にLINE通知
       - name: 事務・制作へのLINE通知
