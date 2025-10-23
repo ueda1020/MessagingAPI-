@@ -30,7 +30,6 @@ jobs:
             echo "group_id=${{ secrets.GROUP_ID }}" >> "$GITHUB_OUTPUT"
             {
               echo "message<<EOF"
-              echo "---これは動作確認用のテストメッセージです---"
               echo "本日、出勤の皆様へ"
               echo ""
               echo "お世話になっております。"
