@@ -1,9 +1,9 @@
 name: UD System DailyLogin Check
 
 on:
-  schedule:
+  # schedule:
     # UTC 21:30 = JST 06:30 (毎日)
-    - cron: "30 21 * * *"
+    # - cron: "30 21 * * *"
   workflow_dispatch:
 
 jobs:
